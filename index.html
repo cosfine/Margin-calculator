@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>실무 마진 계산기</title>
+  <style>
+    :root {
+      --primary: #1e293b;
+      --accent: #2563eb;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --text: #0f172a;
+      --subtext: #64748b;
+      --danger: #dc2626;
+      --success: #059669;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Pretendard", Roboto, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 20px 16px; display: flex; justify-content: center; }
+    .app-container { width: 100%; max-width: 420px; background: var(--card); border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.06); overflow: hidden; border: 1px solid #e2e8f0; }
+    .header { background: var(--primary); color: #fff; padding: 22px 20px; text-align: center; }
+    .header h1 { font-size: 1.25rem; font-weight: 700; margin-bottom: 6px; }
+    .header p { font-size: 0.8rem; color: #cbd5e1; }
+    .tabs { display: flex; background: #f1f5f9; padding: 6px; margin: 16px; border-radius: 12px; }
+    .tab { flex: 1; text-align: center; padding: 12px 0; font-size: 0.9rem; font-weight: 600; color: var(--subtext); border-radius: 8px; cursor: pointer; transition: 0.2s; }
+    .tab.active { background: var(--card); color: var(--accent); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+    .content { padding: 0 20px 24px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .input-group { margin-bottom: 16px; }
+    .input-group label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: var(--primary); }
+    .input-wrapper { position: relative; display: flex; align-items: center; }
+    .input-wrapper input { width: 100%; padding: 14px 40px 14px 16px; font-size: 1.1rem; font-weight: 600; border: 1.5px solid #cbd5e1; border-radius: 12px; outline: none; transition: border 0.2s; background: #f8fafc; }
+    .input-wrapper input:focus { border-color: var(--accent); background: #fff; }
+    .unit { position: absolute; right: 16px; font-size: 0.95rem; font-weight: 600; color: var(--subtext); }
+    .result-box { background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 14px; padding: 20px; margin-top: 24px; }
+    .result-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .result-row:last-child { margin-bottom: 0; }
+    .divider { height: 1px; background: #cbd5e1; margin: 16px 0; border: none; }
+    .result-label { font-size: 0.9rem; color: var(--subtext); font-weight: 500; }
+    .result-value { font-size: 1.1rem; font-weight: 700; color: var(--text); }
+    .result-value.highlight { font-size: 1.3rem; color: var(--accent); }
+    .result-value.danger { color: var(--danger); }
+    .result-value.total { font-size: 1.35rem; color: var(--success); }
+    .reset-btn { width: 100%; margin-top: 16px; padding: 13px; background: #f1f5f9; border: none; border-radius: 10px; font-size: 0.9rem; font-weight: 600; color: var(--subtext); cursor: pointer; }
+    .reset-btn:active { background: #e2e8f0; }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+  <div class="header">
+    <h1>실무 정석 마진 계산기</h1>
+    <p>단가 마진 및 수량별 총 이익 산출</p>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab(1)">판매가 찾기</div>
+    <div class="tab" onclick="switchTab(2)">마진율 찾기</div>
+  </div>
+
+  <div class="content">
+    <!-- 모드 1: 정산가 + 목표 마진율 -> 판매가 & 총수익 -->
+    <div id="panel1" class="panel active">
+      <div class="input-group">
+        <label>단위당 정산가 (원가)</label>
+        <div class="input-wrapper">
+          <input type="text" id="cost1" inputmode="numeric" placeholder="0" oninput="formatNumber(this); calcPrice();">
+          <span class="unit">원</span>
+        </div>
+      </div>
+      <div class="input-group">
+        <label>목표 마진율</label>
+        <div class="input-wrapper">
+          <input type="number" id="margin1" inputmode="decimal" placeholder="예: 30" step="0.1" oninput="calcPrice();">
+          <span class="unit">%</span>
+        </div>
+      </div>
+      <div class="input-group">
+        <label>납품 수량 (kg, 개)</label>
+        <div class="input-wrapper">
+          <input type="text" id="qty1" inputmode="numeric" placeholder="예: 100 (미입력시 1)" oninput="formatNumber(this); calcPrice();">
+          <span class="unit">단위</span>
+        </div>
+      </div>
+
+      <div class="result-box">
+        <div class="result-row">
+          <span class="result-label">단위당 판매가</span>
+          <span class="result-value highlight" id="priceResult">0 원</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">단위당 이익</span>
+          <span class="result-value" id="profit1">0 원</span>
+        </div>
+        <hr class="divider">
+        <div class="result-row">
+          <span class="result-label">총 매출액</span>
+          <span class="result-value" id="totalRev1">0 원</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">총 마진액 (최종)</span>
+          <span class="result-value total" id="totalProfit1">0 원</span>
+        </div>
+      </div>
+      <button class="reset-btn" onclick="resetPanel(1)">초기화</button>
+    </div>
+
+    <!-- 모드 2: 판매가 + 정산가 -> 마진율 & 총수익 -->
+    <div id="panel2" class="panel">
+      <div class="input-group">
+        <label>단위당 판매가 (공급 단가)</label>
+        <div class="input-wrapper">
+          <input type="text" id="price2" inputmode="numeric" placeholder="0" oninput="formatNumber(this); calcMargin();">
+          <span class="unit">원</span>
+        </div>
+      </div>
+      <div class="input-group">
+        <label>단위당 정산가 (원가)</label>
+        <div class="input-wrapper">
+          <input type="text" id="cost2" inputmode="numeric" placeholder="0" oninput="formatNumber(this); calcMargin();">
+          <span class="unit">원</span>
+        </div>
+      </div>
+      <div class="input-group">
+        <label>납품 수량 (kg, 개)</label>
+        <div class="input-wrapper">
+          <input type="text" id="qty2" inputmode="numeric" placeholder="예: 100 (미입력시 1)" oninput="formatNumber(this); calcMargin();">
+          <span class="unit">단위</span>
+        </div>
+      </div>
+
+      <div class="result-box">
+        <div class="result-row">
+          <span class="result-label">실제 마진율</span>
+          <span class="result-value highlight" id="marginResult">0.00 %</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">단위당 이익</span>
+          <span class="result-value" id="profit2">0 원</span>
+        </div>
+        <hr class="divider">
+        <div class="result-row">
+          <span class="result-label">총 매출액</span>
+          <span class="result-value" id="totalRev2">0 원</span>
+        </div>
+        <div class="result-row">
+          <span class="result-label">총 마진액 (최종)</span>
+          <span class="result-value total" id="totalProfit2">0 원</span>
+        </div>
+      </div>
+      <button class="reset-btn" onclick="resetPanel(2)">초기화</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function switchTab(tabIndex) {
+    document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i + 1 === tabIndex));
+    document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('active', i + 1 === tabIndex));
+  }
+
+  function formatNumber(input) {
+    let val = input.value.replace(/[^0-9]/g, '');
+    input.value = val ? parseInt(val, 10).toLocaleString('ko-KR') : '';
+  }
+
+  function getRawNumber(id) {
+    let val = document.getElementById(id).value.replace(/,/g, '');
+    return parseFloat(val) || 0;
+  }
+
+  function calcPrice() {
+    const cost = getRawNumber('cost1');
+    const margin = parseFloat(document.getElementById('margin1').value);
+    const qty = getRawNumber('qty1') || 1; 
+
+    const priceEl = document.getElementById('priceResult');
+    const profitEl = document.getElementById('profit1');
+    const totalRevEl = document.getElementById('totalRev1');
+    const totalProfitEl = document.getElementById('totalProfit1');
+
+    if (!cost || isNaN(margin)) {
+      priceEl.innerText = '0 원'; profitEl.innerText = '0 원';
+      totalRevEl.innerText = '0 원'; totalProfitEl.innerText = '0 원';
+      priceEl.classList.remove('danger');
+      return;
+    }
+
+    if (margin >= 100) {
+      priceEl.innerText = '계산 불가(100%미만)'; priceEl.classList.add('danger');
+      profitEl.innerText = '-'; totalRevEl.innerText = '-'; totalProfitEl.innerText = '-';
+      return;
+    }
+
+    priceEl.classList.remove('danger');
+    const sellingPrice = Math.round(cost / (1 - (margin / 100)));
+    const profit = sellingPrice - cost;
+
+    priceEl.innerText = sellingPrice.toLocaleString('ko-KR') + ' 원';
+    profitEl.innerText = profit.toLocaleString('ko-KR') + ' 원';
+    totalRevEl.innerText = (sellingPrice * qty).toLocaleString('ko-KR') + ' 원';
+    totalProfitEl.innerText = (profit * qty).toLocaleString('ko-KR') + ' 원';
+  }
+
+  function calcMargin() {
+    const price = getRawNumber('price2');
+    const cost = getRawNumber('cost2');
+    const qty = getRawNumber('qty2') || 1;
+
+    const marginEl = document.getElementById('marginResult');
+    const profitEl = document.getElementById('profit2');
+    const totalRevEl = document.getElementById('totalRev2');
+    const totalProfitEl = document.getElementById('totalProfit2');
+
+    if (!price) {
+      marginEl.innerText = '0.00 %'; profitEl.innerText = '0 원';
+      totalRevEl.innerText = '0 원'; totalProfitEl.innerText = '0 원';
+      marginEl.classList.remove('danger');
+      return;
+    }
+
+    const profit = price - cost;
+    const marginRate = (profit / price) * 100;
+
+    profitEl.innerText = profit.toLocaleString('ko-KR') + ' 원';
+    marginEl.innerText = marginRate.toFixed(2) + ' %';
+    totalRevEl.innerText = (price * qty).toLocaleString('ko-KR') + ' 원';
+    totalProfitEl.innerText = (profit * qty).toLocaleString('ko-KR') + ' 원';
+
+    if (marginRate < 0) marginEl.classList.add('danger');
+    else marginEl.classList.remove('danger');
+  }
+
+  function resetPanel(idx) {
+    if (idx === 1) {
+      document.getElementById('cost1').value = '';
+      document.getElementById('margin1').value = '';
+      document.getElementById('qty1').value = '';
+      calcPrice();
+    } else {
+      document.getElementById('price2').value = '';
+      document.getElementById('cost2').value = '';
+      document.getElementById('qty2').value = '';
+      calcMargin();
+    }
+  }
+</script>
+
+</body>
+</html>
